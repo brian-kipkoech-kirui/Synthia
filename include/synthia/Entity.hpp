@@ -22,6 +22,10 @@ struct Entity {
     double heading = 0.0;
     bool active = true;
     std::string metadata;
+    double mass = 1.0;
+    double energy = 100.0;
+    double max_energy = 100.0;
+    bool blocking = false;
 };
 
 }  // namespace synthia

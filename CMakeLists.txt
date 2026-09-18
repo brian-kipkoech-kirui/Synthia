@@ -52,3 +52,7 @@ add_test(NAME test_multi_agent_world COMMAND test_multi_agent_world)
 add_executable(test_world_model tests/test_world_model.cpp)
 target_link_libraries(test_world_model PRIVATE synthia)
 add_test(NAME test_world_model COMMAND test_world_model)
+
+add_executable(test_physics_engine tests/test_physics_engine.cpp)
+target_link_libraries(test_physics_engine PRIVATE synthia)
+add_test(NAME test_physics_engine COMMAND test_physics_engine)

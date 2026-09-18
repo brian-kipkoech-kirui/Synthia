@@ -56,7 +56,6 @@ EpisodeResult ScenarioRunner::run() {
     for (int step_index = 0; step_index < scenario_.task.max_steps; ++step_index) {
         StepRecord step_record;
         step_record.step = step_index;
-        step_record.world_state = world_.entities();
 
         std::vector<AgentStepRecord> agent_steps;
         for (auto& agent_ref : agents_) {
@@ -86,10 +85,29 @@ EpisodeResult ScenarioRunner::run() {
             step_record.agent_steps = agent_steps;
         }
 
+        step_record.simulation_time = world_.simulation_time();
+        step_record.world_state = world_.entities();
+        step_record.events = world_.events();
+
         record_.add_step(step_record);
         result.steps = step_index + 1;
 
-        local_task.status = local_task.evaluate(step_index, step_record.success, step_record.done);
+        const bool survival_complete = scenario_.task.success_condition == "survival_ticks" &&
+            step_index + 1 >= scenario_.task.max_steps;
+        bool resources_complete = scenario_.task.success_condition == "all_resources_collected";
+        if (resources_complete) {
+            for (const auto& resource : world_.resources()) {
+                if (resource.active) {
+                    resources_complete = false;
+                    break;
+                }
+            }
+        }
+        const bool specialized_task = scenario_.task.success_condition == "survival_ticks" ||
+            scenario_.task.success_condition == "all_resources_collected";
+        const bool task_success = specialized_task ? (survival_complete || resources_complete) : step_record.success;
+        const bool task_done = specialized_task ? false : step_record.done;
+        local_task.status = local_task.evaluate(step_index, task_success, task_done);
         local_task.completion_reason = step_record.success ? "goal_reached" : (step_record.done ? "world_failure" : "step_completed");
 
         if (local_task.status == TaskStatus::Success) {

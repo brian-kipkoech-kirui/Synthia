@@ -24,6 +24,9 @@ std::string action_name(synthia::ActionType type) {
         case synthia::ActionType::MoveRight: return "MOVE_RIGHT";
         case synthia::ActionType::MoveUp: return "MOVE_UP";
         case synthia::ActionType::MoveDown: return "MOVE_DOWN";
+        case synthia::ActionType::Pickup: return "PICKUP";
+        case synthia::ActionType::Drop: return "DROP";
+        case synthia::ActionType::Interact: return "INTERACT";
         case synthia::ActionType::Wait: return "WAIT";
         default: return "UNKNOWN";
     }
@@ -64,10 +67,23 @@ public:
         const auto dz = observation.agent_position.z - target_.z;
         observation.distance_to_target = std::sqrt(dx * dx + dy * dy + dz * dz);
         observation.heading = 0.0;
+        observation.energy = world.agent_energy(id_);
+        observation.simulation_time = world.simulation_time();
+        observation.terrain = world.terrain_at(observation.agent_position);
+        observation.environment = world.environment();
+        for (const auto& entity : world.entities()) {
+            if (entity.type == "resource" && entity.active && world.distance(entity.position, observation.agent_position) <= 1.5) {
+                observation.nearby_entities.push_back(entity);
+                observation.nearby_resource_ids.push_back(entity.id);
+            }
+        }
         return observation;
     }
 
     synthia::Action decide(const synthia::Observation& observation) override {
+        if (!observation.nearby_resource_ids.empty()) {
+            return {synthia::ActionType::Pickup, observation.nearby_resource_ids.front(), 1.0};
+        }
         if (observation.distance_to_target > 0.5) {
             if (observation.agent_position.x > observation.target_position.x) {
                 return {synthia::ActionType::MoveLeft, "", 1.0};
@@ -87,6 +103,12 @@ private:
     synthia::Vec3 target_;
 };
 
+class SurvivalAgent : public TargetAgent {
+public:
+    SurvivalAgent(std::string id, synthia::Vec3 target)
+        : TargetAgent(std::move(id), std::move(target)) {}
+};
+
 synthia::Scenario make_multi_agent_nav_scenario(int seed) {
     synthia::Scenario scenario;
     scenario.id = "multi_agent_nav";
@@ -97,6 +119,20 @@ synthia::Scenario make_multi_agent_nav_scenario(int seed) {
     scenario.task.description = "all agents reach their targets";
     scenario.task.max_steps = 8;
     scenario.task.success_condition = "all_agents_reached_targets";
+    scenario.task.failure_condition = "failed";
+    return scenario;
+}
+
+synthia::Scenario make_survival_scenario(int seed) {
+    synthia::Scenario scenario;
+    scenario.id = "physics_survival";
+    scenario.name = "physics_survival";
+    scenario.description = "agents survive deterministic environmental physics";
+    scenario.seed = seed;
+    scenario.task.id = "survive_environment";
+    scenario.task.description = "remain active while navigating hazards and collecting resources";
+    scenario.task.max_steps = 8;
+    scenario.task.success_condition = "survival_ticks";
     scenario.task.failure_condition = "failed";
     return scenario;
 }
@@ -159,19 +195,41 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    synthia::WorldConfig config{"multi_agent_nav", static_cast<unsigned int>(seed), 12, 12, 10, "urban"};
+    const bool survival = scenario_name == "physics_survival";
+    const bool resources = scenario_name == "resource_collection";
+    synthia::WorldConfig config{scenario_name, static_cast<unsigned int>(seed), survival ? 20 : 12, survival ? 20 : 12, survival ? 8 : 10, "urban"};
     config.start_position = {0.0, 0.0, 0.0};
     config.target_position = {3.0, 0.0, 3.0};
 
     synthia::World world(config);
-    world.add_agent("agent_0", {0.0, 0.0, 0.0}, {3.0, 0.0, 3.0});
-    world.add_agent("agent_1", {0.0, 0.0, 1.0}, {2.0, 0.0, 2.0});
+    if (survival) {
+        world.add_agent("agent_0", {0.0, 0.0, 0.0}, {4.0, 0.0, 4.0});
+        world.add_agent("agent_1", {0.0, 0.0, 2.0}, {4.0, 0.0, 6.0});
+        world.add_agent("agent_2", {2.0, 0.0, 0.0}, {6.0, 0.0, 4.0});
+        world.add_obstacle("wall_0", {2.0, 0.0, 1.0});
+        world.add_obstacle("wall_1", {2.0, 0.0, 2.0});
+        world.set_terrain({4.0, 0.0, 3.0}, synthia::TerrainType::Hazard);
+        world.set_terrain({5.0, 0.0, 3.0}, synthia::TerrainType::Water);
+        world.add_resource("resource_0", {3.0, 0.0, 3.0}, "energy_cell");
+    } else {
+        world.add_agent("agent_0", {0.0, 0.0, 0.0}, {3.0, 0.0, 3.0});
+        world.add_agent("agent_1", {0.0, 0.0, 1.0}, {2.0, 0.0, 2.0});
+        if (resources) {
+            world.add_resource("resource_0", {3.0, 0.0, 3.0}, "energy_cell");
+        }
+    }
 
-    TargetAgent agent_0("agent_0", {3.0, 0.0, 3.0});
-    TargetAgent agent_1("agent_1", {2.0, 0.0, 2.0});
-    std::vector<std::reference_wrapper<synthia::Agent>> agents = {agent_0, agent_1};
+    TargetAgent agent_0("agent_0", survival ? synthia::Vec3{4.0, 0.0, 4.0} : synthia::Vec3{3.0, 0.0, 3.0});
+    TargetAgent agent_1("agent_1", survival ? synthia::Vec3{4.0, 0.0, 6.0} : synthia::Vec3{2.0, 0.0, 2.0});
+    SurvivalAgent agent_2("agent_2", {6.0, 0.0, 4.0});
+    std::vector<std::reference_wrapper<synthia::Agent>> agents = survival ? std::vector<std::reference_wrapper<synthia::Agent>>{agent_0, agent_1, agent_2} : std::vector<std::reference_wrapper<synthia::Agent>>{agent_0, agent_1};
 
-    synthia::Scenario scenario = make_multi_agent_nav_scenario(seed);
+    synthia::Scenario scenario = survival ? make_survival_scenario(seed) : (resources ? make_survival_scenario(seed) : make_multi_agent_nav_scenario(seed));
+    if (resources) {
+        scenario.id = "resource_collection";
+        scenario.task.success_condition = "all_resources_collected";
+        scenario.task.max_steps = 10;
+    }
     synthia::ScenarioRunner runner(world, agents, scenario.task, scenario);
     const auto result = runner.run();
 

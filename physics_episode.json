@@ -1,0 +1,36 @@
+scenario=physics_survival
+seed=42
+world_id=physics_survival_42
+initial_agents=11
+step=0 reward=0 success=0 done=0 message=step executed
+agent=agent_0 action=MOVE_RIGHT reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=0 success=0
+agent=agent_2 action=MOVE_RIGHT reward=0 success=0
+step=1 reward=-1 success=0 done=0 message=step executed
+agent=agent_0 action=MOVE_RIGHT reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_RIGHT reward=0 success=0
+step=2 reward=-1 success=0 done=0 message=step executed
+agent=agent_0 action=MOVE_RIGHT reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_RIGHT reward=0 success=0
+step=3 reward=-1 success=0 done=0 message=step executed
+agent=agent_0 action=MOVE_RIGHT reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_RIGHT reward=0 success=0
+step=4 reward=-1 success=0 done=0 message=step executed
+agent=agent_0 action=MOVE_UP reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_UP reward=0 success=0
+step=5 reward=-1 success=0 done=0 message=step executed
+agent=agent_0 action=MOVE_UP reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_UP reward=0 success=0
+step=6 reward=24 success=1 done=1 message=step executed
+agent=agent_0 action=PICKUP reward=25 success=1
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_UP reward=0 success=0
+step=7 reward=9 success=1 done=1 message=agent reached goal
+agent=agent_0 action=MOVE_UP reward=0 success=0
+agent=agent_1 action=MOVE_RIGHT reward=-1 success=0
+agent=agent_2 action=MOVE_UP reward=10 success=1

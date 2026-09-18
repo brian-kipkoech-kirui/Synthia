@@ -11,6 +11,20 @@
 
 namespace synthia {
 
+enum class TerrainType {
+    Plain,
+    Obstacle,
+    Water,
+    Hazard,
+    ResourceZone
+};
+
+struct EnvironmentState {
+    double temperature = 20.0;
+    std::string weather = "clear";
+    int hazard_level = 0;
+};
+
 struct WorldEvent {
     std::string id;
     std::string type;
@@ -21,6 +35,10 @@ struct WorldEvent {
 
 struct WorldState {
     int simulation_time = 0;
+    int width = 0;
+    int height = 0;
+    std::uint32_t seed = 0;
+    EnvironmentState environment;
     std::vector<Entity> entities;
     std::vector<WorldEvent> events;
 };
@@ -30,6 +48,9 @@ struct SimulationStep {
     bool done = false;
     double reward = 0.0;
     std::string message;
+    double cost = 0.0;
+    Vec3 resulting_position;
+    std::vector<WorldEvent> events;
 };
 
 class World {
@@ -43,6 +64,7 @@ public:
     int step_count() const;
     int simulation_time() const;
     double time() const;
+    const EnvironmentState& environment() const;
     const std::vector<Entity>& entities() const;
     const Vec3& start_position() const;
     const Vec3& target_position() const;
@@ -51,6 +73,14 @@ public:
     const Vec3& agent_position(const std::string& agent_id) const;
     const Vec3& agent_target_position(const std::string& agent_id) const;
     const Entity* find_entity(const std::string& id) const;
+    double agent_energy(const std::string& agent_id) const;
+    double distance(const Vec3& lhs, const Vec3& rhs) const;
+    int manhattan_distance(const Vec3& lhs, const Vec3& rhs) const;
+    bool adjacent(const Vec3& lhs, const Vec3& rhs) const;
+    TerrainType terrain_at(const Vec3& position) const;
+    void set_terrain(const Vec3& position, TerrainType terrain);
+    void add_obstacle(const std::string& obstacle_id, const Vec3& position, bool active = true);
+    void set_obstacle_active(const std::string& obstacle_id, bool active);
     std::vector<Entity> resources() const;
     std::vector<WorldEvent> events() const;
     WorldState snapshot() const;
@@ -80,9 +110,15 @@ private:
     std::vector<Entity> initial_entities_;
     std::vector<WorldEvent> events_;
     std::vector<WorldEvent> initial_events_;
+    EnvironmentState environment_;
+    EnvironmentState initial_environment_;
+    std::map<std::pair<int, int>, TerrainType> terrain_;
+    std::map<std::pair<int, int>, TerrainType> initial_terrain_;
     std::map<std::string, Vec3> agent_targets_;
     std::map<std::string, Vec3> initial_agent_targets_;
     Entity* find_entity(const std::string& id);
+    void update_environment();
+    void record_event(const WorldEvent& event);
 };
 
 }  // namespace synthia
