@@ -20,6 +20,8 @@ struct Entity {
     Vec3 position;
     Vec3 velocity;
     double heading = 0.0;
+    bool active = true;
+    std::string metadata;
 };
 
 }  // namespace synthia

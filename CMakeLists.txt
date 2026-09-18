@@ -10,6 +10,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library(synthia
     src/World.cpp
     src/ExperimentRecord.cpp
+    src/ScenarioRunner.cpp
 )
 
 target_include_directories(synthia
@@ -35,3 +36,19 @@ add_test(NAME test_task_lifecycle COMMAND test_task_lifecycle)
 add_executable(test_episode_replay tests/test_episode_replay.cpp)
 target_link_libraries(test_episode_replay PRIVATE synthia)
 add_test(NAME test_episode_replay COMMAND test_episode_replay)
+
+add_executable(test_scenario_runner tests/test_scenario_runner.cpp)
+target_link_libraries(test_scenario_runner PRIVATE synthia)
+add_test(NAME test_scenario_runner COMMAND test_scenario_runner)
+
+add_executable(test_determinism tests/test_determinism.cpp)
+target_link_libraries(test_determinism PRIVATE synthia)
+add_test(NAME test_determinism COMMAND test_determinism)
+
+add_executable(test_multi_agent_world tests/test_multi_agent_world.cpp)
+target_link_libraries(test_multi_agent_world PRIVATE synthia)
+add_test(NAME test_multi_agent_world COMMAND test_multi_agent_world)
+
+add_executable(test_world_model tests/test_world_model.cpp)
+target_link_libraries(test_world_model PRIVATE synthia)
+add_test(NAME test_world_model COMMAND test_world_model)

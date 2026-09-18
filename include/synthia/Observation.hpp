@@ -20,6 +20,8 @@ struct Observation {
     std::vector<ActionType> available_actions;
 
     std::vector<Entity> nearby_entities;
+    std::vector<std::string> nearby_resource_ids;
+    std::vector<std::string> visible_entities;
     double reward = 0.0;
 };
 

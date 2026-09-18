@@ -18,13 +18,29 @@ public:
 
     virtual Observation observe(const World& world) = 0;
     virtual Action decide(const Observation& observation) = 0;
+    virtual void on_step_result(const Action& action, const SimulationStep& step, const World& world) {
+        (void)action;
+        (void)step;
+        (void)world;
+    }
 
     const std::string& id() const { return id_; }
     const std::string& goal() const { return goal_; }
+    const std::vector<std::string>& inventory() const { return inventory_; }
+    void add_item(const std::string& item) { inventory_.push_back(item); }
+    bool has_item(const std::string& item) const {
+        for (const auto& current : inventory_) {
+            if (current == item) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 protected:
     std::string id_;
     std::string goal_;
+    std::vector<std::string> inventory_;
 };
 
 }  // namespace synthia
