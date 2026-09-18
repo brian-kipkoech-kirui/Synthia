@@ -1,0 +1,16 @@
+{
+  "id": "nav_demo",
+  "name": "navigation",
+  "description": "Agent moves toward a goal destination.",
+  "task": {
+    "id": "move_to_goal",
+    "name": "navigation",
+    "description": "Reach the target coordinate.",
+    "required_objects": ["agent"],
+    "success_condition": "position.z >= 30.0",
+    "failure_condition": "step_count > max_steps",
+    "max_steps": 20
+  },
+  "tags": ["navigation", "headless", "demo"],
+  "seed": 42
+}

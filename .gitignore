@@ -1,0 +1,40 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+.venv/
+.env
+
+# Build artifacts
+build/
+dist/
+out/
+*.log
+
+# Unreal / engine
+*.uasset
+*.umap
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Node
+node_modules/
+
+# Data
+*.zip
+*.tar.gz
+*.parquet
+
+# Local scratch
+scratch/
+notes/

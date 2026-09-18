@@ -1,0 +1,16 @@
+{
+  "id": "delivery_demo",
+  "name": "delivery",
+  "description": "Agent collects a resource and delivers it to a destination.",
+  "task": {
+    "id": "deliver_resource",
+    "name": "delivery",
+    "description": "Collect a resource and move it to the destination.",
+    "required_objects": ["resource", "destination"],
+    "success_condition": "resource_delivered == true",
+    "failure_condition": "task_timeout == true",
+    "max_steps": 30
+  },
+  "tags": ["delivery", "multi-step", "headless"],
+  "seed": 7
+}

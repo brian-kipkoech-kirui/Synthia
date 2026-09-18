@@ -1,0 +1,28 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace synthia {
+
+enum class TaskStatus {
+    Pending,
+    Running,
+    Success,
+    Failed,
+    Timeout
+};
+
+struct Task {
+    std::string id;
+    std::string description;
+    TaskStatus status = TaskStatus::Pending;
+    std::string start_condition;
+    std::string success_condition;
+    std::string failure_condition;
+    int max_steps = 100;
+    double reward = 0.0;
+    std::string completion_reason;
+};
+
+}  // namespace synthia
