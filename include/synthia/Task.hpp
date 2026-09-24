@@ -31,7 +31,7 @@ struct Task {
         if (done && !success) {
             return TaskStatus::Failed;
         }
-        if (step_index >= max_steps) {
+        if (step_index + 1 >= max_steps) {
             return TaskStatus::Timeout;
         }
         return TaskStatus::Running;

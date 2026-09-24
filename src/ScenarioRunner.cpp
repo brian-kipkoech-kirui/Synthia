@@ -53,7 +53,11 @@ EpisodeResult ScenarioRunner::run() {
     local_task.status = TaskStatus::Running;
     local_task.completion_reason = "episode_started";
 
-    for (int step_index = 0; step_index < scenario_.task.max_steps; ++step_index) {
+    const int total_steps = scenario_.steps.empty()
+        ? std::max(0, scenario_.task.max_steps)
+        : std::max(std::max(0, scenario_.task.max_steps), static_cast<int>(scenario_.steps.size()));
+
+    for (int step_index = 0; step_index < total_steps; ++step_index) {
         StepRecord step_record;
         step_record.step = step_index;
 
@@ -92,10 +96,9 @@ EpisodeResult ScenarioRunner::run() {
         record_.add_step(step_record);
         result.steps = step_index + 1;
 
-        const bool survival_complete = scenario_.task.success_condition == "survival_ticks" &&
-            step_index + 1 >= scenario_.task.max_steps;
-        bool resources_complete = scenario_.task.success_condition == "all_resources_collected";
-        if (resources_complete) {
+        bool resources_complete = false;
+        if (scenario_.task.success_condition == "all_resources_collected") {
+            resources_complete = true;
             for (const auto& resource : world_.resources()) {
                 if (resource.active) {
                     resources_complete = false;
@@ -103,29 +106,61 @@ EpisodeResult ScenarioRunner::run() {
                 }
             }
         }
-        const bool specialized_task = scenario_.task.success_condition == "survival_ticks" ||
-            scenario_.task.success_condition == "all_resources_collected";
-        const bool task_success = specialized_task ? (survival_complete || resources_complete) : step_record.success;
-        const bool task_done = specialized_task ? false : step_record.done;
+
+        const bool survival_complete = scenario_.task.success_condition == "survival_ticks" &&
+            (step_index + 1) >= scenario_.task.max_steps;
+        const bool task_success = (scenario_.task.success_condition == "goal_reached") ? step_record.success :
+            ((scenario_.task.success_condition == "all_resources_collected") ? resources_complete :
+            ((scenario_.task.success_condition == "survival_ticks") ? survival_complete : step_record.success));
+        const bool task_done = step_record.done;
+
         local_task.status = local_task.evaluate(step_index, task_success, task_done);
-        local_task.completion_reason = step_record.success ? "goal_reached" : (step_record.done ? "world_failure" : "step_completed");
+        local_task.completion_reason = task_success ? "goal_reached" : (task_done ? "world_failure" : "step_completed");
 
         if (local_task.status == TaskStatus::Success) {
             result.termination = EpisodeTermination::Success;
             result.final_status = "SUCCESS";
+            step_record.message = "success";
+            if (!record_.steps().empty()) {
+                record_.steps().back().message = step_record.message;
+                record_.steps().back().success = step_record.success;
+                record_.steps().back().done = step_record.done;
+                record_.steps().back().reward = step_record.reward;
+            }
             break;
         }
 
         if (local_task.status == TaskStatus::Timeout) {
             result.termination = EpisodeTermination::Timeout;
             result.final_status = "TIMEOUT";
+            step_record.message = "timeout";
+            if (!record_.steps().empty()) {
+                record_.steps().back().message = step_record.message;
+                record_.steps().back().success = step_record.success;
+                record_.steps().back().done = step_record.done;
+                record_.steps().back().reward = step_record.reward;
+            }
             break;
         }
 
         if (local_task.status == TaskStatus::Failed) {
             result.termination = EpisodeTermination::Failure;
             result.final_status = "FAILURE";
+            step_record.message = "failed";
+            if (!record_.steps().empty()) {
+                record_.steps().back().message = step_record.message;
+                record_.steps().back().success = step_record.success;
+                record_.steps().back().done = step_record.done;
+                record_.steps().back().reward = step_record.reward;
+            }
             break;
+        }
+
+        if (!record_.steps().empty()) {
+            record_.steps().back().message = step_record.message;
+            record_.steps().back().success = step_record.success;
+            record_.steps().back().done = step_record.done;
+            record_.steps().back().reward = step_record.reward;
         }
     }
 
@@ -162,8 +197,13 @@ ReplayResult replay(const ExperimentRecord& record) {
             result.total_reward += a.reward;
         }
         result.steps.push_back(replay_step);
+
         if (step.success) {
             result.termination = EpisodeTermination::Success;
+        } else if (step.message == "timeout") {
+            result.termination = EpisodeTermination::Timeout;
+        } else if (step.message == "failed" || step.message == "invalid action" || step.message == "insufficient energy") {
+            result.termination = EpisodeTermination::Failure;
         }
     }
 

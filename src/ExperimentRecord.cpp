@@ -26,6 +26,10 @@ const std::vector<StepRecord>& ExperimentRecord::steps() const {
     return steps_;
 }
 
+std::vector<StepRecord>& ExperimentRecord::steps() {
+    return steps_;
+}
+
 const std::vector<Entity>& ExperimentRecord::initial_state() const {
     return initial_state_;
 }

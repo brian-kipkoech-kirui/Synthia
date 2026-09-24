@@ -107,7 +107,9 @@ The AI should not depend on graphics to learn. The system should run large numbe
 7. Sensor capture and dataset export
 8. Scenario engine and reproducibility
 9. AI training and evaluation
-10. Web platform and cloud scale
+10. World Data & Knowledge Engine (v0.5)
+11. Autonomous research and reasoning agents (v0.6)
+12. Web platform and cloud scale
 
 ## Documentation
 

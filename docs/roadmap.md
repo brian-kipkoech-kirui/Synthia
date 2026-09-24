@@ -136,7 +136,29 @@ Enable learning loops.
 - automatic failure discovery
 - retraining pipelines
 
-## Milestone 15: Web platform
+## Milestone 15: World Data & Knowledge Engine (v0.5)
+
+Turn heterogeneous observations into a structured world model.
+
+- ingest internet, market, climate, and public data streams
+- extract entities, events, and relationships
+- preserve provenance and confidence
+- maintain world-state snapshots over time
+- generate hypotheses from correlated signals
+- support replay, counterfactuals, and simulation over indexed information
+
+## Milestone 16: Autonomous Research / Reasoning Agents (v0.6)
+
+Build agents that continuously perceive, search, correlate, hypothesize, simulate, and decide.
+
+- observe and search across sources
+- index and structure facts
+- generate candidate explanations
+- simulate alternative futures
+- learn from outcomes and update memory
+- make decisions beyond explicitly programmed rules
+
+## Milestone 17: Web platform
 
 Provide user tooling.
 

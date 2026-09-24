@@ -52,6 +52,7 @@ public:
     void set_initial_state(const std::vector<Entity>& state);
     void add_step(const StepRecord& record);
     const std::vector<StepRecord>& steps() const;
+    std::vector<StepRecord>& steps();
     const std::vector<Entity>& initial_state() const;
     const std::string& scenario_id() const;
     const std::string& world_id() const;
