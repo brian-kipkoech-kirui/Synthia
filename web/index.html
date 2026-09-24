@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SYNTHIA Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>SYNTHIA</h1>
+        </div>
+        <div class="header-status">
+          <span class="status-dot"></span>
+          <span id="engine-status">ENGINE ONLINE</span>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <div class="panel">
+            <h2>World</h2>
+            <ul class="nav-list">
+              <li>Entities <span id="entity-count">0</span></li>
+              <li>Events <span id="event-count">0</span></li>
+              <li>Observations <span id="observation-count">0</span></li>
+              <li>Relationships <span id="relationship-count">0</span></li>
+              <li>Sources <span id="source-count">0</span></li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h2>Search</h2>
+            <input id="search-input" type="text" placeholder="Search SYNTHIA..." />
+            <button id="search-button">Search</button>
+            <div id="search-results" class="results-box"></div>
+          </div>
+        </aside>
+
+        <section class="main-panel">
+          <div class="metrics-row">
+            <div class="metric-card">
+              <label>World time</label>
+              <strong id="world-time">--</strong>
+            </div>
+            <div class="metric-card">
+              <label>Entity count</label>
+              <strong id="metric-entities">0</strong>
+            </div>
+            <div class="metric-card">
+              <label>Event count</label>
+              <strong id="metric-events">0</strong>
+            </div>
+            <div class="metric-card">
+              <label>Observation count</label>
+              <strong id="metric-observations">0</strong>
+            </div>
+            <div class="metric-card">
+              <label>Relationship count</label>
+              <strong id="metric-relationships">0</strong>
+            </div>
+          </div>
+
+          <div class="panel graph-panel">
+            <div class="panel-header">
+              <h2>Knowledge Graph</h2>
+              <button id="reset-graph">Reset view</button>
+            </div>
+            <svg id="graph" viewBox="0 0 900 320"></svg>
+          </div>
+
+          <div class="panel timeline-panel">
+            <div class="panel-header">
+              <h2>Timeline</h2>
+            </div>
+            <div id="timeline" class="timeline"></div>
+          </div>
+
+          <div class="details-grid">
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Entity Explorer</h2>
+              </div>
+              <div id="entity-list" class="list-box"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Event Explorer</h2>
+              </div>
+              <div id="event-list" class="list-box"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Observation Explorer</h2>
+              </div>
+              <div id="observation-list" class="list-box"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

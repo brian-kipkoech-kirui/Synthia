@@ -11,6 +11,9 @@ add_library(synthia
     src/World.cpp
     src/ExperimentRecord.cpp
     src/ScenarioRunner.cpp
+    src/knowledge/KnowledgeGraph.cpp
+    src/knowledge/KnowledgeIndex.cpp
+    src/knowledge/WorldState.cpp
 )
 
 target_include_directories(synthia
@@ -22,6 +25,11 @@ add_executable(synthia_headless
     apps/synthia_headless.cpp
 )
 target_link_libraries(synthia_headless PRIVATE synthia)
+
+add_executable(synthia_dashboard
+    src/dashboard_server.cpp
+)
+target_link_libraries(synthia_dashboard PRIVATE synthia)
 
 enable_testing()
 
