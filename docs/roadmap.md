@@ -147,6 +147,14 @@ Turn heterogeneous observations into a structured world model.
 - generate hypotheses from correlated signals
 - support replay, counterfactuals, and simulation over indexed information
 
+### Financial Data Fabric v0.5.1 status
+
+- provider-neutral snapshot, polling, and streaming source boundary
+- delayed Yahoo chart fallback and Finnhub WebSocket trade adapter
+- deterministic capture/replay, validation, provenance, and current market projection
+- browser visibility and controls for financial state and stream status
+- remaining verification: run the manual live integration with runtime Finnhub credentials
+
 ## Milestone 16: Autonomous Research / Reasoning Agents (v0.6)
 
 Build agents that continuously perceive, search, correlate, hypothesize, simulate, and decide.

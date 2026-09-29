@@ -1,228 +1,28 @@
-const state = {
-  entities: [],
-  events: [],
-  observations: [],
-  relationships: [],
-  sources: [],
-  graph: { nodes: [], edges: [] },
-  timeline: [],
-  status: {},
-};
-
-function setText(id, value) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.textContent = value;
-  }
+const app = { state: null, knowledge: null, timer: null, selected: null, replay: null, replayIndex: 0 };
+const $ = (id) => document.getElementById(id);
+const setText = (id, value) => { const node = $(id); if (node) node.textContent = value; };
+async function request(path, options = {}) { const response = await fetch(path, options); if (!response.ok) throw new Error(`${response.status} ${path}`); return response.json(); }
+const display = (value) => value === undefined || value === null || value === '' ? 'not available' : value;
+function entityPoint(entity, state, scale, origin) { return { x: origin.x + entity.x * scale, y: origin.y + (state.world.height - entity.z) * scale }; }
+function drawWorld() {
+  const canvas = $('world'); const ctx = canvas.getContext('2d'); const state = app.state; if (!state) return;
+  const pad = 34; const scale = Math.min((canvas.width - pad * 2) / state.world.width, (canvas.height - pad * 2) / state.world.height); const origin = { x: pad, y: pad };
+  ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#101820'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#263943'; ctx.lineWidth = 1;
+  for (let x = 0; x <= state.world.width; x += 1) { ctx.beginPath(); ctx.moveTo(origin.x + x * scale, origin.y); ctx.lineTo(origin.x + x * scale, origin.y + state.world.height * scale); ctx.stroke(); }
+  for (let z = 0; z <= state.world.height; z += 1) { ctx.beginPath(); ctx.moveTo(origin.x, origin.y + z * scale); ctx.lineTo(origin.x + state.world.width * scale, origin.y + z * scale); ctx.stroke(); }
+  ctx.strokeStyle = '#6ee7b7'; ctx.lineWidth = 2; ctx.strokeRect(origin.x, origin.y, state.world.width * scale, state.world.height * scale);
+  for (const entity of state.entities) { const point = entityPoint(entity, state, scale, origin); ctx.beginPath(); if (entity.type === 'obstacle') { ctx.rect(point.x - 8, point.y - 8, 16, 16); ctx.fillStyle = '#9aa7b1'; } else if (entity.type === 'resource') { ctx.moveTo(point.x, point.y - 8); ctx.lineTo(point.x + 8, point.y); ctx.lineTo(point.x, point.y + 8); ctx.lineTo(point.x - 8, point.y); ctx.closePath(); ctx.fillStyle = entity.active ? '#f4c95d' : '#53616b'; } else { ctx.arc(point.x, point.y, 9, 0, Math.PI * 2); ctx.fillStyle = entity.active ? '#6ee7b7' : '#53616b'; } ctx.fill(); ctx.strokeStyle = entity.id === app.selected ? '#fff' : '#0b1115'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#dce7e8'; ctx.font = '12px monospace'; ctx.fillText(entity.id, point.x + 12, point.y + 4); }
+  canvas.onclick = (event) => { const rect = canvas.getBoundingClientRect(); const x = (event.clientX - rect.left) * canvas.width / rect.width; const y = (event.clientY - rect.top) * canvas.height / rect.height; app.selected = null; for (const entity of state.entities) { const point = entityPoint(entity, state, scale, origin); if (Math.hypot(x - point.x, y - point.y) < 16) app.selected = entity.id; } renderInspector(); drawWorld(); };
 }
-
-function renderStatus(status) {
-  state.status = status;
-  setText('engine-status', `ENGINE ${status.engine_status || 'ONLINE'}`);
-  setText('world-time', status.world_time || '--');
-  setText('entity-count', status.entity_count ?? 0);
-  setText('event-count', status.event_count ?? 0);
-  setText('observation-count', status.observation_count ?? 0);
-  setText('relationship-count', status.relationship_count ?? 0);
-  setText('source-count', status.source_count ?? 0);
-  setText('metric-entities', status.entity_count ?? 0);
-  setText('metric-events', status.event_count ?? 0);
-  setText('metric-observations', status.observation_count ?? 0);
-  setText('metric-relationships', status.relationship_count ?? 0);
-}
-
-function renderList(id, items, formatter, emptyMessage = 'No data') {
-  const container = document.getElementById(id);
-  if (!container) return;
-  container.innerHTML = '';
-  if (!items.length) {
-    container.innerHTML = `<div class="list-item"><strong>${emptyMessage}</strong></div>`;
-    return;
-  }
-  for (const item of items) {
-    container.appendChild(formatter(item));
-  }
-}
-
-function entityFormatter(entity) {
-  const div = document.createElement('div');
-  div.className = 'list-item';
-  const label = document.createElement('strong');
-  label.textContent = entity.canonical_name || entity.id;
-  const detail = document.createElement('small');
-  detail.textContent = `${entity.entity_type || 'unknown'} • ${entity.description || ''}`;
-  div.appendChild(label);
-  div.appendChild(detail);
-  return div;
-}
-
-function eventFormatter(event) {
-  const div = document.createElement('div');
-  div.className = 'list-item';
-  const label = document.createElement('strong');
-  label.textContent = event.event_type || 'event';
-  const detail = document.createElement('small');
-  detail.textContent = `${event.timestamp || 0} • ${event.description || ''}`;
-  div.appendChild(label);
-  div.appendChild(detail);
-  return div;
-}
-
-function observationFormatter(observation) {
-  const div = document.createElement('div');
-  div.className = 'list-item';
-  const label = document.createElement('strong');
-  label.textContent = observation.data_type || 'observation';
-  const detail = document.createElement('small');
-  detail.textContent = `${observation.timestamp || 0} • ${observation.content || ''}`;
-  div.appendChild(label);
-  div.appendChild(detail);
-  return div;
-}
-
-function renderGraph(graph) {
-  const svg = document.getElementById('graph');
-  if (!svg) return;
-  svg.innerHTML = '';
-
-  const width = 900;
-  const height = 320;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const radius = 26;
-
-  const nodes = graph.nodes || [];
-  const edges = graph.edges || [];
-
-  edges.forEach((edge, index) => {
-    const source = nodes.find((node) => node.id === edge.source);
-    const target = nodes.find((node) => node.id === edge.target);
-    if (!source || !target) return;
-    const sourceX = centerX + ((index % 3) - 1) * 180 + (source.type === 'company' ? 0 : 80);
-    const sourceY = centerY + ((index % 2) * 80) - 40;
-    const targetX = centerX + ((index % 3) - 1) * 180 + 120;
-    const targetY = centerY + ((index % 2) * 80) - 10;
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', sourceX);
-    line.setAttribute('y1', sourceY);
-    line.setAttribute('x2', targetX);
-    line.setAttribute('y2', targetY);
-    line.setAttribute('stroke', '#5cc8ff');
-    line.setAttribute('stroke-width', '2');
-    svg.appendChild(line);
-  });
-
-  nodes.forEach((node, index) => {
-    const x = centerX + ((index % 3) - 1) * 180;
-    const y = centerY + (Math.floor(index / 3) * 80) - 40;
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', x);
-    circle.setAttribute('cy', y);
-    circle.setAttribute('r', radius);
-    circle.setAttribute('fill', node.type === 'company' ? '#5cc8ff' : '#8af2d2');
-    circle.setAttribute('stroke', '#dfeaf9');
-    svg.appendChild(circle);
-
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', x);
-    text.setAttribute('y', y + 4);
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('fill', '#0b1020');
-    text.setAttribute('font-size', '11');
-    text.setAttribute('font-weight', 'bold');
-    text.textContent = node.label.slice(0, 10);
-    svg.appendChild(text);
-  });
-}
-
-function renderTimeline(items) {
-  const timeline = document.getElementById('timeline');
-  if (!timeline) return;
-  timeline.innerHTML = '';
-  items.forEach((entry) => {
-    const row = document.createElement('div');
-    row.className = 'timeline-item';
-    row.innerHTML = `<span class="timeline-dot"></span><span>${entry.timestamp} • ${entry.label}</span>`;
-    timeline.appendChild(row);
-  });
-}
-
-function renderSearchResults(results) {
-  const box = document.getElementById('search-results');
-  if (!box) return;
-  box.innerHTML = '';
-  if (!results.length) {
-    box.innerHTML = '<div class="result-item">No results</div>';
-    return;
-  }
-  results.forEach((result) => {
-    const item = document.createElement('div');
-    item.className = 'result-item';
-    item.innerHTML = `<strong>${result.type}</strong><div>${result.label}</div><small>${result.detail}</small>`;
-    box.appendChild(item);
-  });
-}
-
-async function fetchJson(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Request failed: ${url}`);
-  }
-  return response.json();
-}
-
-async function loadDashboard() {
-  try {
-    const status = await fetchJson('/api/status');
-    renderStatus(status);
-
-    const [entities, events, observations, graph, timelineData] = await Promise.all([
-      fetchJson('/api/entities'),
-      fetchJson('/api/events'),
-      fetchJson('/api/observations'),
-      fetchJson('/api/graph'),
-      fetchJson('/api/timeline'),
-    ]);
-
-    state.entities = entities;
-    state.events = events;
-    state.observations = observations;
-    state.graph = graph;
-    state.timeline = timelineData;
-
-    renderList('entity-list', entities, entityFormatter);
-    renderList('event-list', events, eventFormatter);
-    renderList('observation-list', observations, observationFormatter);
-    renderGraph(graph);
-    renderTimeline(timelineData);
-  } catch (error) {
-    console.error(error);
-  }
-}
-
-function bindSearch() {
-  const input = document.getElementById('search-input');
-  const button = document.getElementById('search-button');
-
-  const runSearch = async () => {
-    const q = input.value.trim();
-    if (!q) return;
-    try {
-      const results = await fetchJson(`/api/search?q=${encodeURIComponent(q)}`);
-      renderSearchResults(results);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  button.addEventListener('click', runSearch);
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') runSearch();
-  });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  bindSearch();
-  loadDashboard();
-  setInterval(loadDashboard, 5000);
-});
+function renderInspector() { const entity = app.state?.entities.find((item) => item.id === app.selected); const box = $('inspector'); if (!entity) { setText('selected-kind', 'NONE'); box.className = 'empty'; box.textContent = 'Select an agent or entity in the world.'; return; } setText('selected-kind', entity.type.toUpperCase()); box.className = 'data'; box.innerHTML = `<h3>${entity.id}</h3><dl><dt>type</dt><dd>${display(entity.type)}</dd><dt>position</dt><dd>(${entity.x}, ${entity.y}, ${entity.z})</dd><dt>velocity</dt><dd>(${entity.vx}, ${entity.vy}, ${entity.vz})</dd><dt>energy</dt><dd>${display(entity.energy)}</dd><dt>active</dt><dd>${entity.active}</dd><dt>metadata</dt><dd>${display(entity.metadata)}</dd><dt>inventory</dt><dd>not available</dd><dt>recent actions</dt><dd>not available</dd><dt>rewards</dt><dd>not available</dd></dl>`; }
+function renderState() { const state = app.state; if (!state) return; setText('tick', state.tick); setText('time', Number(state.time).toFixed(1)); setText('agent-count', state.agents.length); setText('entity-count', state.entities.filter((item) => item.active).length); setText('event-count', state.events.length); setText('scenario-readout', state.scenario); setText('seed-readout', state.seed); setText('world-size', `${state.world.width} x ${state.world.height}`); setText('connection', state.running ? 'ENGINE RUNNING' : 'ENGINE PAUSED'); $('events').innerHTML = state.events.slice().reverse().map((event) => `<div class="feed-row"><b>[${state.tick}]</b><span>${event.type}</span><small>${event.actor_id} / ${event.message}</small></div>`).join('') || '<div class="empty">No events recorded.</div>'; drawWorld(); renderInspector(); }
+function renderKnowledge() { const knowledge = app.knowledge || { entities: [], relationships: [] }; setText('knowledge-count', knowledge.entities.length); $('knowledge').innerHTML = knowledge.entities.map((item) => `<div class="knowledge-row"><b>${item.id}</b><span>${item.type}</span><small>${display(item.description)} / source: simulation</small></div>`).join('') || '<div class="empty">No knowledge recorded.</div>'; $('relationships').innerHTML = knowledge.relationships.map((item) => `<div class="relationship"><b>${item.source}</b><span>${item.type}</span><b>${item.target}</b><small>provenance: ${display(item.provenance)}</small></div>`).join('') || '<div class="empty">No relationships recorded.</div>'; }
+async function refresh() { try { if (!app.replay) { app.state = await request('/api/state'); app.knowledge = await request('/api/knowledge'); renderState(); renderKnowledge(); } } catch (error) { setText('connection', 'ENGINE OFFLINE'); console.error(error); } }
+async function command(path) { await request(path, { method: 'POST' }); await refresh(); }
+function startRecording() { app.replay = null; app.replayIndex = 0; setText('record-status', 'Recording native states'); $('record-indicator').classList.add('recording'); }
+function stopRecording() { $('record-indicator').classList.remove('recording'); setText('record-status', 'Recording stopped'); setText('replay-status', 'Use Replay to inspect captured state'); }
+async function startRecording() { await request('/api/record/start', { method: 'POST' }); setText('record-status', 'Recording native states'); $('record-indicator').classList.add('recording'); }
+async function stopRecording() { await request('/api/record/stop', { method: 'POST' }); $('record-indicator').classList.remove('recording'); setText('record-status', 'Recording stopped'); setText('replay-status', 'Use Replay to inspect captured state'); }
+async function replayRecording() { const states = await request('/api/replay'); if (!states.length) { setText('replay-status', 'No captured episode'); return; } app.replay = states; app.replayIndex = 0; app.state = states[0]; app.knowledge = await request('/api/knowledge'); renderState(); renderKnowledge(); setText('record-status', 'Replay mode'); setText('replay-status', `${states.length} authoritative states captured`); clearInterval(app.timer); app.timer = setInterval(() => { if (!app.replay) return; app.state = app.replay[app.replayIndex]; renderState(); app.replayIndex = (app.replayIndex + 1) % app.replay.length; }, 500); }
+function bind() { $('start').onclick = () => command('/api/simulation/start'); $('pause').onclick = () => command('/api/simulation/pause'); $('step').onclick = () => command('/api/simulation/step'); $('reset').onclick = () => command('/api/simulation/reset'); $('record').onclick = startRecording; $('stop-record').onclick = stopRecording; $('replay').onclick = replayRecording; $('load').onclick = async () => { const body = `scenario=${encodeURIComponent($('scenario').value)}&seed=${encodeURIComponent($('seed').value)}`; await request('/api/scenario/load', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }); app.replay = null; await refresh(); }; $('speed').onchange = () => { clearInterval(app.timer); app.timer = setInterval(refresh, Number($('speed').value)); }; }
+document.addEventListener('DOMContentLoaded', () => { bind(); refresh(); app.timer = setInterval(refresh, 500); });

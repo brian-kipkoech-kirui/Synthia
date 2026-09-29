@@ -1,6 +1,8 @@
 #include "synthia/Agent.hpp"
 #include "synthia/World.hpp"
 #include "synthia/knowledge/WorldState.hpp"
+#include "synthia/finance/FinancialIngestionSession.hpp"
+#include "synthia/finance/FinancialSources.hpp"
 
 #include <arpa/inet.h>
 #include <fstream>
@@ -12,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <chrono>
 #include <unistd.h>
 
 namespace {
@@ -27,6 +30,10 @@ using KnowledgeObservation = synthia::knowledge::Observation;
 using KnowledgeRelationship = synthia::knowledge::Relationship;
 using KnowledgeSource = synthia::knowledge::Source;
 using KnowledgeWorldState = synthia::knowledge::WorldState;
+using FinancialDataFabric = synthia::finance::FinancialDataFabric;
+using FinancialIngestionSession = synthia::finance::FinancialIngestionSession;
+using FinancialRecord = synthia::finance::FinancialRecord;
+using IngestReport = synthia::finance::IngestReport;
 
 std::string quote(const std::string& value) {
     std::ostringstream out;
@@ -92,6 +99,10 @@ public:
 class DashboardRuntime {
 public:
     DashboardRuntime() { load("multi_agent_nav", 42); }
+    ~DashboardRuntime() {
+        running_ = false;
+        if (worker_.joinable()) worker_.join();
+    }
 
     void load(const std::string& scenario, unsigned int seed) {
         scenario_ = scenario;
@@ -100,24 +111,50 @@ public:
         config.target_position = {12.0, 0.0, 12.0};
         world_ = std::make_unique<World>(config);
         world_->add_agent("agent_0", config.start_position, config.target_position);
-        world_->add_resource("resource_0", {8.0, 0.0, 8.0}, "supply");
-        world_->add_obstacle("obstacle_0", {5.0, 0.0, 5.0});
+        world_->add_agent("agent_1", {1.0, 0.0, 2.0}, {12.0, 0.0, 12.0});
+        if (scenario == "resource_collection") {
+            world_->add_resource("resource_0", {4.0, 0.0, 1.0}, "supply");
+            world_->add_resource("resource_1", {8.0, 0.0, 8.0}, "supply");
+        } else {
+            world_->add_resource("resource_0", {8.0, 0.0, 8.0}, "supply");
+        }
+        world_->add_obstacle("dashboard_obstacle_0", {5.0, 0.0, 5.0});
+        if (scenario == "physics_survival") {
+            world_->set_terrain({7.0, 0.0, 7.0}, synthia::TerrainType::Hazard);
+            world_->add_obstacle("obstacle_1", {9.0, 0.0, 6.0});
+        }
         agent_ = std::make_unique<DashboardAgent>();
         knowledge_ = KnowledgeWorldState{};
         ingest_state();
+        history_.clear();
+        recording_ = false;
         running_ = false;
     }
 
-    void start() { running_ = true; }
+    void start(std::mutex* mutex) {
+        running_ = true;
+        if (!worker_.joinable()) worker_ = std::thread([this, mutex] { run_loop(mutex); });
+    }
     void pause() { running_ = false; }
     void step() {
         const auto observation = agent_->observe(*world_);
         const auto action = agent_->decide(observation);
         const auto simulation = world_->step(agent_->id(), action);
         agent_->on_step_result(action, simulation, *world_);
+        if (world_->has_agent("agent_1")) {
+            world_->step("agent_1", {ActionType::MoveUp, "", 1.0});
+        }
         ingest_state();
+        if (recording_) history_.push_back(state_json());
     }
     void reset() { load(scenario_, world_->seed()); }
+    void start_recording() { history_.clear(); recording_ = true; history_.push_back(state_json()); }
+    void stop_recording() { recording_ = false; }
+    std::string replay_json() const {
+        std::ostringstream out; out << '[';
+        for (std::size_t index = 0; index < history_.size(); ++index) { if (index != 0) out << ','; out << history_[index]; }
+        out << ']'; return out.str();
+    }
 
     std::string state_json() const {
         std::ostringstream out;
@@ -182,7 +219,60 @@ public:
         return out.str();
     }
 
+    std::string finance_markets_json() const {
+        std::ostringstream out; out << '['; bool first = true;
+        for (const auto& item : finance_.records()) {
+            const auto* market = std::get_if<synthia::finance::MarketRecord>(&item.second);
+            if (!market) continue;
+            if (!first) out << ','; first = false;
+            out << "{\"identifier\":" << quote(market->instrument.identifier)
+                << ",\"symbol\":" << quote(market->instrument.symbol)
+                << ",\"provider_symbol\":" << quote(market->instrument.provider_symbol)
+                << ",\"country\":" << quote(market->instrument.country)
+                << ",\"exchange\":" << quote(market->instrument.exchange)
+                << ",\"currency\":" << quote(market->instrument.currency)
+                << ",\"asset_class\":" << quote(synthia::finance::asset_class_name(market->instrument.asset_class))
+                << ",\"price\":" << market->price << ",\"open\":" << market->open << ",\"high\":" << market->high << ",\"low\":" << market->low << ",\"close\":" << market->close << ",\"volume\":" << market->volume
+                << ",\"observed_at\":" << market->provenance.observed_at << ",\"source_timestamp\":" << market->provenance.source_timestamp
+                << ",\"received_at\":" << market->provenance.received_at << ",\"latency_ms\":" << market->provenance.latency_ms
+                << ",\"source\":" << quote(market->provenance.source_id) << ",\"quality\":" << quote(synthia::finance::data_quality_name(market->provenance.quality)) << '}';
+        }
+        out << ']'; return out.str();
+    }
+    std::string finance_sources_json() const {
+        return "[{\"id\":\"yahoo_finance\",\"name\":\"Yahoo Finance chart API\",\"type\":\"market\",\"quality\":\"delayed-or-provider-defined\"}]";
+    }
+    std::string finance_ingestion_json() const {
+        std::ostringstream out; out << "{\"session_id\":" << quote(last_session_ ? last_session_->id : "not available")
+            << ",\"received\":" << last_report_.received << ",\"accepted\":" << last_report_.accepted << ",\"rejected\":" << last_report_.rejected << ",\"deduplicated\":" << last_report_.deduplicated << '}'; return out.str();
+    }
+    std::string finance_analysis_json() const {
+        std::size_t count = 0;
+        for (const auto& item : finance_.records()) if (std::holds_alternative<synthia::finance::MarketRecord>(item.second)) ++count;
+        std::ostringstream out;
+        out << "{\"status\":\"observed-data-only\",\"available\":true,\"market_records\":" << count
+            << ",\"modeled_metrics\":\"not available\",\"message\":\"Quantitative analysis will consume normalized FinancialData records in a later milestone.\"}";
+        return out.str();
+    }
+    void ingest_finance(const std::string& symbol, const std::string& period) {
+        auto source = std::make_unique<synthia::finance::YahooFinanceSource>(symbol, "US", "NASDAQ", "USD", period);
+        auto* source_pointer = source.get(); finance_.add_source(std::move(source));
+        last_report_ = finance_.ingest();
+        last_session_ = std::make_unique<FinancialIngestionSession>(FinancialIngestionSession::capture("dashboard_" + symbol, finance_, last_report_));
+        if (!source_pointer->error().empty()) last_errors_.push_back(source_pointer->error());
+    }
+
 private:
+    void run_loop(std::mutex* mutex) {
+        while (running_) {
+            {
+                std::lock_guard<std::mutex> lock(*mutex);
+                if (running_) step();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+    }
+
     static std::string entity_json(const synthia::Entity& entity) {
         std::ostringstream out;
         out << "{\"id\":" << quote(entity.id) << ",\"type\":" << quote(entity.type)
@@ -252,8 +342,16 @@ private:
     std::unique_ptr<World> world_;
     std::unique_ptr<DashboardAgent> agent_;
     KnowledgeWorldState knowledge_;
+    KnowledgeWorldState finance_knowledge_;
+    FinancialDataFabric finance_{finance_knowledge_};
+    IngestReport last_report_;
+    std::unique_ptr<FinancialIngestionSession> last_session_;
+    std::vector<std::string> last_errors_;
     std::string scenario_;
     bool running_ = false;
+    bool recording_ = false;
+    std::vector<std::string> history_;
+    std::thread worker_;
 };
 
 std::string quote_error(const std::string& message) { return "{\"error\":" + quote(message) + "}"; }
@@ -283,14 +381,28 @@ void handle_client(int socket, DashboardRuntime& runtime, std::mutex& mutex) {
         else if (method == "GET" && path == "/api/entities") result = runtime.entities_json(false);
         else if (method == "GET" && path == "/api/events") result = runtime.events_json();
         else if (method == "GET" && path == "/api/knowledge") result = runtime.knowledge_json();
-        else if (method == "POST" && path == "/api/simulation/start") { runtime.start(); result = runtime.state_json(); }
+        else if (method == "GET" && path == "/api/finance/markets") result = runtime.finance_markets_json();
+        else if (method == "GET" && path == "/api/finance/instruments") result = runtime.finance_markets_json();
+        else if (method == "GET" && path == "/api/finance/quotes") result = runtime.finance_markets_json();
+        else if (method == "GET" && path == "/api/finance/history") result = runtime.finance_markets_json();
+        else if (method == "GET" && path == "/api/finance/sources") result = runtime.finance_sources_json();
+        else if (method == "GET" && path == "/api/finance/ingestion") result = runtime.finance_ingestion_json();
+        else if (method == "GET" && path == "/api/finance/analysis") result = runtime.finance_analysis_json();
+        else if (method == "POST" && path == "/api/simulation/start") { runtime.start(&mutex); result = runtime.state_json(); }
         else if (method == "POST" && path == "/api/simulation/pause") { runtime.pause(); result = runtime.state_json(); }
         else if (method == "POST" && path == "/api/simulation/step") { runtime.step(); result = runtime.state_json(); }
         else if (method == "POST" && path == "/api/simulation/reset") { runtime.reset(); result = runtime.state_json(); }
+        else if (method == "POST" && path == "/api/record/start") { runtime.start_recording(); result = runtime.state_json(); }
+        else if (method == "POST" && path == "/api/record/stop") { runtime.stop_recording(); result = runtime.state_json(); }
+        else if (method == "GET" && path == "/api/replay") result = runtime.replay_json();
         else if (method == "POST" && path == "/api/scenario/load") {
             const auto values = form_values(body);
             runtime.load(values.count("scenario") ? values.at("scenario") : "multi_agent_nav", values.count("seed") ? static_cast<unsigned int>(std::stoul(values.at("seed"))) : 42);
             result = runtime.state_json();
+        } else if (method == "POST" && path == "/api/finance/ingest") {
+            const auto values = form_values(body);
+            runtime.ingest_finance(values.count("symbol") ? values.at("symbol") : "AAPL", values.count("period") ? values.at("period") : "1mo");
+            result = runtime.finance_ingestion_json();
         } else if (path == "/" || path == "/index.html" || path == "/app.js" || path == "/styles.css") {
             content_type = path == "/app.js" ? "application/javascript" : (path == "/styles.css" ? "text/css" : "text/html");
             result = read_file(path == "/" ? "web/index.html" : "web" + path);

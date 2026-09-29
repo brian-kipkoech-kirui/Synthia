@@ -14,6 +14,12 @@ add_library(synthia
     src/knowledge/KnowledgeGraph.cpp
     src/knowledge/KnowledgeIndex.cpp
     src/knowledge/WorldState.cpp
+    src/finance/FinancialData.cpp
+    src/finance/FinancialDataSource.cpp
+    src/finance/FinancialDataFabric.cpp
+    src/finance/FinancialSources.cpp
+    src/finance/FinancialStream.cpp
+    src/finance/FinancialIngestionSession.cpp
 )
 
 target_include_directories(synthia
@@ -30,6 +36,12 @@ add_executable(synthia_dashboard
     src/dashboard_server.cpp
 )
 target_link_libraries(synthia_dashboard PRIVATE synthia)
+
+add_executable(synthia_finance apps/synthia_finance.cpp)
+target_link_libraries(synthia_finance PRIVATE synthia)
+
+add_executable(synthia_finance_live_test apps/synthia_finance_live_test.cpp)
+target_link_libraries(synthia_finance_live_test PRIVATE synthia)
 
 enable_testing()
 
@@ -63,4 +75,33 @@ add_test(NAME test_world_model COMMAND test_world_model)
 
 add_executable(test_physics_engine tests/test_physics_engine.cpp)
 target_link_libraries(test_physics_engine PRIVATE synthia)
+
+add_executable(test_financial_data_fabric tests/test_financial_data_fabric.cpp)
+target_link_libraries(test_financial_data_fabric PRIVATE synthia)
+add_test(NAME test_financial_data_fabric COMMAND test_financial_data_fabric)
+add_executable(test_financial_provider tests/test_financial_provider.cpp)
+target_link_libraries(test_financial_provider PRIVATE synthia)
+add_test(NAME test_financial_provider COMMAND test_financial_provider)
+add_executable(test_financial_ingestion tests/test_financial_ingestion.cpp)
+target_link_libraries(test_financial_ingestion PRIVATE synthia)
+add_test(NAME test_financial_ingestion COMMAND test_financial_ingestion)
+add_test(NAME test_financial_replay COMMAND test_financial_ingestion)
+add_executable(test_financial_stream tests/test_financial_stream.cpp)
+target_link_libraries(test_financial_stream PRIVATE synthia)
+add_test(NAME test_financial_data_source COMMAND test_financial_stream source)
+add_test(NAME test_financial_stream COMMAND test_financial_stream stream)
+add_test(NAME test_financial_event_validation COMMAND test_financial_stream validation)
+add_test(NAME test_financial_deduplication COMMAND test_financial_stream deduplication)
+add_test(NAME test_financial_provenance COMMAND test_financial_stream provenance)
+add_test(NAME test_financial_world_state COMMAND test_financial_stream world_state)
+add_test(NAME test_financial_connection_failure COMMAND test_financial_stream connection_failure)
+add_test(NAME test_financial_stream_replay COMMAND test_financial_stream replay)
+add_executable(test_financial_stream_lifecycle tests/test_financial_stream_lifecycle.cpp)
+target_link_libraries(test_financial_stream_lifecycle PRIVATE synthia)
+add_test(NAME test_stream_connection_auth_subscription COMMAND test_financial_stream_lifecycle setup)
+add_test(NAME test_stream_malformed_message COMMAND test_financial_stream_lifecycle malformed)
+add_test(NAME test_stream_duplicate_event COMMAND test_financial_stream_lifecycle duplicate)
+add_test(NAME test_stream_reconnect_shutdown COMMAND test_financial_stream_lifecycle reconnect)
+add_test(NAME test_stream_provider_failure COMMAND test_financial_stream_lifecycle failure)
+add_test(NAME test_stream_authentication_failure COMMAND test_financial_stream_lifecycle authentication)
 add_test(NAME test_physics_engine COMMAND test_physics_engine)
